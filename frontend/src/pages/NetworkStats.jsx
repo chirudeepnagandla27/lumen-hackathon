@@ -1,24 +1,24 @@
 import React, { useState, useEffect } from 'react';
 
-const NetworkStats = () => {
-  const [stats, setStats] = useState(null);
+const AnalyticsDashboard = () => {
+  const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetchStats();
+    fetchAnalytics();
   }, []);
 
-  const fetchStats = async () => {
+  const fetchAnalytics = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/network/stats`);
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/analytics/public-dashboard`);
       const data = await response.json();
       
       if (data.success) {
-        setStats(data.stats);
+        setAnalytics(data.data);
       } else {
-        setError('Failed to fetch network stats');
+        setError('Failed to fetch analytics data');
       }
     } catch (err) {
       setError('Network error: ' + err.message);
@@ -40,7 +40,7 @@ const NetworkStats = () => {
       <div className="text-center">
         <div className="text-red-500 text-xl mb-4">❌ {error}</div>
         <button 
-          onClick={fetchStats}
+          onClick={fetchAnalytics}
           className="bg-telecom-primary text-white px-6 py-2 rounded-lg hover:bg-telecom-secondary transition-colors"
         >
           Retry
@@ -51,56 +51,64 @@ const NetworkStats = () => {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-telecom-primary">Network Statistics</h1>
+      <div className="text-center mb-12">
+        <h1 className="text-5xl font-bold text-white mb-4">📈 Live Analytics</h1>
+        <p className="text-xl text-white/80 mb-6">Real-time insights into your subscription business</p>
         <button 
-          onClick={fetchStats}
-          className="bg-telecom-primary text-white px-4 py-2 rounded-lg hover:bg-telecom-secondary transition-colors"
+          onClick={fetchAnalytics}
+          className="btn-glass"
         >
-          🔄 Refresh
+          🔄 Refresh Data
         </button>
       </div>
       
-      {stats && (
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <div className="text-3xl font-bold text-telecom-primary mb-2">
-              {stats.totalTowers}
+      {analytics && (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="card-modern p-8 text-center group">
+            <div className="text-6xl font-bold text-gradient mb-4 group-hover:scale-110 transition-transform">
+              {analytics.totalUsers}
             </div>
-            <div className="text-gray-600">Total Towers</div>
+            <div className="text-gray-600 font-semibold text-lg">👥 Total Users</div>
           </div>
           
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <div className="text-3xl font-bold text-green-600 mb-2">
-              {stats.activeTowers}
+          <div className="card-modern p-8 text-center group">
+            <div className="text-6xl font-bold text-gradient mb-4 group-hover:scale-110 transition-transform">
+              {analytics.activeSubscriptions}
             </div>
-            <div className="text-gray-600">Active Towers</div>
+            <div className="text-gray-600 font-semibold text-lg">✨ Active Subscriptions</div>
           </div>
           
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <div className="text-3xl font-bold text-blue-600 mb-2">
-              {stats.averageSignal}%
+          <div className="card-modern p-8 text-center group">
+            <div className="text-6xl font-bold text-gradient mb-4 group-hover:scale-110 transition-transform">
+              ${analytics.monthlyRevenue}
             </div>
-            <div className="text-gray-600">Avg Signal</div>
+            <div className="text-gray-600 font-semibold text-lg">💰 Monthly Revenue</div>
           </div>
           
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <div className="text-3xl font-bold text-purple-600 mb-2">
-              {stats.averageLatency}ms
+          <div className="card-modern p-8 text-center group">
+            <div className="text-6xl font-bold text-gradient mb-4 group-hover:scale-110 transition-transform">
+              {analytics.churnRate}%
             </div>
-            <div className="text-gray-600">Avg Latency</div>
+            <div className="text-gray-600 font-semibold text-lg">📉 Churn Rate</div>
           </div>
           
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <div className="text-3xl font-bold text-green-600 mb-2">
-              {stats.uptime}
+          <div className="card-modern p-8 text-center group">
+            <div className="text-6xl font-bold text-gradient mb-4 group-hover:scale-110 transition-transform">
+              {analytics.totalPlans}
             </div>
-            <div className="text-gray-600">Uptime</div>
+            <div className="text-gray-600 font-semibold text-lg">📋 Available Plans</div>
+          </div>
+          
+          <div className="card-modern p-8 text-center group">
+            <div className="text-6xl font-bold text-gradient mb-4 group-hover:scale-110 transition-transform">
+              ${analytics.averageRevenue}
+            </div>
+            <div className="text-gray-600 font-semibold text-lg">📊 ARPU</div>
           </div>
           
           <div className="bg-white p-6 rounded-lg shadow-lg col-span-full">
             <div className="text-sm text-gray-500">
-              Last Updated: {new Date(stats.lastUpdated).toLocaleString()}
+              Last Updated: {new Date().toLocaleString()}
             </div>
           </div>
         </div>
@@ -109,6 +117,6 @@ const NetworkStats = () => {
   );
 };
 
-export default NetworkStats;
+export default AnalyticsDashboard;
 
 

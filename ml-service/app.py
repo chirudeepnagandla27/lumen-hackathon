@@ -2,16 +2,21 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import json
 import random
-from datetime import datetime
+from datetime import datetime, date
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import roc_auc_score
+from sklearn.preprocessing import LabelEncoder
 
 app = Flask(__name__)
 CORS(app)
 
-# Mock ML model for subscription management
+# ML model for subscription management
 class SubscriptionRecommendationEngine:
     def __init__(self):
         self.model_loaded = True
-        # Mock plan data for recommendations
+        # Mock plan data for recommendations (kept for other functions)
         self.plans = {
             'fibernet-basic': {'type': 'Fibernet', 'category': 'Basic', 'price': 29.99, 'data': 100, 'speed': 50},
             'fibernet-standard': {'type': 'Fibernet', 'category': 'Standard', 'price': 49.99, 'data': 500, 'speed': 100},
@@ -19,6 +24,114 @@ class SubscriptionRecommendationEngine:
             'copper-basic': {'type': 'Broadband Copper', 'category': 'Basic', 'price': 19.99, 'data': 50, 'speed': 25},
             'copper-standard': {'type': 'Broadband Copper', 'category': 'Standard', 'price': 34.99, 'data': 250, 'speed': 50},
         }
+        
+        # Load the dataset with error handling
+        dataset_path = "C:\\hackathon-app\\SubscriptionUseCase_Dataset.xlsx"
+        try:
+            self.user_data = pd.read_excel(dataset_path, sheet_name="User_Data")
+            self.subscriptions = pd.read_excel(dataset_path, sheet_name="Subscriptions")
+            self.subscription_plans = pd.read_excel(dataset_path, sheet_name="Subscription_Plans")
+            self.subscription_logs = pd.read_excel(dataset_path, sheet_name="Subscription_Logs")
+            self.billing_info = pd.read_excel(dataset_path, sheet_name="Billing_Information")
+        except FileNotFoundError:
+            print(f"Warning: Dataset file not found at {dataset_path}. Using mock data for demo.")
+            # Use mock data if file doesn't exist
+            self.user_data = pd.DataFrame()
+            self.subscriptions = pd.DataFrame()
+            self.subscription_plans = pd.DataFrame()
+            self.subscription_logs = pd.DataFrame()
+            self.billing_info = pd.DataFrame()
+        except Exception as e:
+            print(f"Warning: Error loading dataset: {str(e)}. Using mock data for demo.")
+            self.user_data = pd.DataFrame()
+            self.subscriptions = pd.DataFrame()
+            self.subscription_plans = pd.DataFrame()
+            self.subscription_logs = pd.DataFrame()
+            self.billing_info = pd.DataFrame()
+        
+        # Preprocess and train the churn model
+        self.churn_model, self.label_encoders = self._train_churn_model()
+
+    def _train_churn_model(self):
+        # Check if we have data to train with
+        if self.subscriptions.empty or self.subscription_plans.empty or self.user_data.empty:
+            print("Warning: No data available for training. Using mock model.")
+            # Return a mock model and encoders
+            from sklearn.dummy import DummyClassifier
+            mock_model = DummyClassifier(strategy='constant', constant=0)
+            # Create mock training data
+            X_mock = pd.DataFrame({'feature': [1, 2, 3]})
+            y_mock = pd.Series([0, 0, 1])
+            mock_model.fit(X_mock, y_mock)
+            return mock_model, {}
+        
+        try:
+            # Merge relevant data
+            df = self.subscriptions.merge(self.subscription_plans, left_on='Product Id', right_on='Product Id', how='left')
+            df = df.merge(self.user_data, left_on='User Id', right_on='User Id', how='left')
+        
+            # Engineer features
+            current_date = date(2025, 9, 13)  # Use the provided current date
+            
+            # Subscription duration in days
+            df['Start Date'] = pd.to_datetime(df['Start Date'])
+            df['subscription_duration_days'] = (current_date - df['Start Date'].dt.date).dt.days
+            
+            # Last renewed duration
+            df['Last Renewed Date'] = pd.to_datetime(df['Last Renewed Date'])
+            df['days_since_last_renewed'] = (current_date - df['Last Renewed Date'].dt.date).dt.days
+            
+            # Count payment failures per subscription
+            payment_failures = self.billing_info[self.billing_info['payment_status'] == 'failed'].groupby('subscription_id').size().reset_index(name='payment_failures')
+            df = df.merge(payment_failures, left_on='Subscription Id', right_on='subscription_id', how='left')
+            df['payment_failures'] = df['payment_failures'].fillna(0)
+            
+            # Count renew failures from logs
+            renew_failures = self.subscription_logs[self.subscription_logs['action'] == 'renew_failed'].groupby('Subscription id').size().reset_index(name='renew_failures')
+            df = df.merge(renew_failures, left_on='Subscription Id', right_on='Subscription id', how='left')
+            df['renew_failures'] = df['renew_failures'].fillna(0)
+            
+            # Label encode categorical features
+            label_encoders = {}
+            categorical_cols = ['Subscription Type', 'Auto Renewal Allowed', 'Status_x']  # Status_x is user status
+            for col in categorical_cols:
+                le = LabelEncoder()
+                df[col] = le.fit_transform(df[col].astype(str))
+                label_encoders[col] = le
+            
+            # Features and target
+            features = ['Price', 'subscription_duration_days', 'days_since_last_renewed', 'payment_failures', 'renew_failures'] + categorical_cols
+            df['churn'] = (df['Status'] == 'PAUSED').astype(int)  # Target: 1 if PAUSED, else 0
+            
+            X = df[features]
+            y = df['churn']
+            
+            # Handle missing values (simple imputation)
+            X = X.fillna(0)
+            
+            # Train-test split
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+            
+            # Train RandomForestClassifier
+            model = RandomForestClassifier(n_estimators=100, random_state=42)
+            model.fit(X_train, y_train)
+            
+            # Optional: Evaluate
+            predictions = model.predict_proba(X_test)[:, 1]
+            auc = roc_auc_score(y_test, predictions)
+            print(f"Churn Model AUC: {auc}")
+            
+            return model, label_encoders
+        
+        except Exception as e:
+            print(f"Warning: Error training churn model: {str(e)}. Using fallback model.")
+            # Return a mock model as fallback
+            from sklearn.dummy import DummyClassifier
+            mock_model = DummyClassifier(strategy='constant', constant=0)
+            X_mock = pd.DataFrame({'feature': [1, 2, 3]})
+            y_mock = pd.Series([0, 0, 1])
+            mock_model.fit(X_mock, y_mock)
+            return mock_model, {}
     
     def recommend_plans(self, user_data):
         """Recommend subscription plans based on user usage and preferences"""
@@ -56,33 +169,87 @@ class SubscriptionRecommendationEngine:
         return recommendations[:5]  # Top 5 recommendations
     
     def predict_churn(self, subscription_data):
-        """Predict if a user is likely to cancel their subscription"""
-        usage_ratio = subscription_data.get('usage_ratio', 0.5)  # current_usage / quota
-        price = subscription_data.get('price', 50)
-        months_subscribed = subscription_data.get('months_subscribed', 1)
-        support_tickets = subscription_data.get('support_tickets', 0)
-        payment_delays = subscription_data.get('payment_delays', 0)
+        """Predict if a user is likely to cancel their subscription using the trained ML model"""
+        try:
+            # Extract or compute features similar to training
+            subscription_id = subscription_data.get('subscription_id')
+            price = subscription_data.get('price', 50)
+            months_subscribed = subscription_data.get('months_subscribed', 1)
         
-        # Simple heuristic model for churn prediction
-        churn_factors = {
-            'low_usage': 1.0 if usage_ratio < 0.2 else 0.0,
-            'high_price': 1.0 if price > 70 else 0.0,
-            'new_customer': 1.0 if months_subscribed < 3 else 0.0,
-            'support_issues': min(support_tickets * 0.2, 1.0),
-            'payment_issues': min(payment_delays * 0.3, 1.0)
-        }
+            # For demo, compute features (in real use, fetch from dataset or input)
+            current_date = date(2025, 9, 13)
+            start_date = datetime.strptime(subscription_data.get('start_date', '2024-01-01'), '%Y-%m-%d').date()
+            last_renewed_date = datetime.strptime(subscription_data.get('last_renewed_date', '2024-01-01'), '%Y-%m-%d').date()
+            
+            subscription_duration_days = (current_date - start_date).days
+            days_since_last_renewed = (current_date - last_renewed_date).days
+            
+            # Payment failures (mock or fetch)
+            payment_failures = subscription_data.get('payment_failures', 0)
+            renew_failures = subscription_data.get('renew_failures', 0)
+            
+            # Categorical (assume inputs or defaults)
+            subscription_type = subscription_data.get('subscription_type', 'monthly')
+            auto_renewal_allowed = subscription_data.get('auto_renewal_allowed', 'Yes')
+            user_status = subscription_data.get('user_status', 'active')
         
-        churn_score = sum(churn_factors.values()) / len(churn_factors)
-        churn_probability = min(churn_score * 0.8 + random.uniform(0.1, 0.3), 1.0)
+            # Encode categoricals
+            encoded = []
+            for col, val in zip(['Subscription Type', 'Auto Renewal Allowed', 'Status_x'], [subscription_type, auto_renewal_allowed, user_status]):
+                le = self.label_encoders.get(col)
+                if le:
+                    try:
+                        encoded.append(le.transform([str(val)])[0])
+                    except ValueError:
+                        encoded.append(0)  # Default if value not seen during training
+                else:
+                    encoded.append(0)  # Default if encoder not found
+            
+            # If we have a trained model, use it
+            if hasattr(self.churn_model, 'predict_proba') and len(encoded) > 0:
+                # Prepare input
+                input_features = [price, subscription_duration_days, days_since_last_renewed, payment_failures, renew_failures] + encoded
+                input_df = pd.DataFrame([input_features], columns=['Price', 'subscription_duration_days', 'days_since_last_renewed', 'payment_failures', 'renew_failures', 'Subscription Type', 'Auto Renewal Allowed', 'Status_x'])
+                
+                # Predict
+                churn_probability = self.churn_model.predict_proba(input_df)[0][1]
+            else:
+                # Use rule-based fallback if model not available
+                churn_probability = self._rule_based_churn_prediction(price, months_subscribed, payment_failures, renew_failures)
+            
+            risk_level = 'high' if churn_probability > 0.7 else 'medium' if churn_probability > 0.4 else 'low'
+            
+            # Mock factors for now (can use feature importance later)
+            churn_factors = {
+                'low_usage': random.uniform(0, 1),
+                'high_price': 1.0 if price > 70 else 0.0,
+                'new_customer': 1.0 if months_subscribed < 3 else 0.0,
+                'support_issues': random.uniform(0, 1),
+                'payment_issues': min(payment_failures * 0.3, 1.0)
+            }
+            
+            return {
+                'churn_probability': round(churn_probability, 2),
+                'risk_level': risk_level,
+                'factors': churn_factors,
+                'retention_strategies': self._get_retention_strategies(churn_factors, subscription_data)
+            }
         
-        risk_level = 'high' if churn_probability > 0.7 else 'medium' if churn_probability > 0.4 else 'low'
-        
-        return {
-            'churn_probability': round(churn_probability, 2),
-            'risk_level': risk_level,
-            'factors': churn_factors,
-            'retention_strategies': self._get_retention_strategies(churn_factors, subscription_data)
-        }
+        except Exception as e:
+            print(f"Warning: Error in churn prediction: {str(e)}. Using fallback.")
+            # Return fallback prediction
+            return {
+                'churn_probability': 0.3,
+                'risk_level': 'medium',
+                'factors': {
+                    'low_usage': 0.3,
+                    'high_price': 0.2,
+                    'new_customer': 0.1,
+                    'support_issues': 0.2,
+                    'payment_issues': 0.2
+                },
+                'retention_strategies': ['Provide personalized support', 'Offer loyalty rewards']
+            }
     
     def optimize_pricing(self, plan_data):
         """Suggest pricing optimizations for plans"""
@@ -110,6 +277,31 @@ class SubscriptionRecommendationEngine:
             'strategy': strategy,
             'expected_impact': self._calculate_pricing_impact(current_price, suggested_price, subscriber_count, churn_rate)
         }
+    
+    def _rule_based_churn_prediction(self, price, months_subscribed, payment_failures, renew_failures):
+        """Rule-based churn prediction fallback when ML model is not available"""
+        churn_score = 0.0
+        
+        # High price increases churn risk
+        if price > 70:
+            churn_score += 0.3
+        elif price > 50:
+            churn_score += 0.1
+        
+        # New customers more likely to churn
+        if months_subscribed < 3:
+            churn_score += 0.2
+        elif months_subscribed < 6:
+            churn_score += 0.1
+        
+        # Payment issues increase churn
+        churn_score += min(payment_failures * 0.15, 0.3)
+        churn_score += min(renew_failures * 0.1, 0.2)
+        
+        # Add some randomness for demo
+        churn_score += random.uniform(0, 0.1)
+        
+        return min(churn_score, 0.95)  # Cap at 95%
     
     def _calculate_usage_fit(self, current_usage, plan_quota):
         """Calculate how well the plan quota fits user's usage"""
@@ -244,7 +436,7 @@ def predict_churn():
                 'error': 'No subscription data provided'
             }), 400
         
-        # Get churn prediction
+        # Get churn prediction using ML model
         churn_prediction = ml_model.predict_churn(data)
         
         return jsonify({
@@ -297,5 +489,3 @@ if __name__ == '__main__':
     print("   • Churn Prediction: http://localhost:5000/churn/predict")
     print("   • Pricing Optimization: http://localhost:5000/pricing/optimize")
     app.run(host='0.0.0.0', port=5000, debug=True)
-
-

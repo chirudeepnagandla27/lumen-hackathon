@@ -4,7 +4,10 @@ const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
-// All analytics routes require authentication
+// Public analytics endpoint for development
+router.get('/public-dashboard', analyticsController.getPublicDashboardStats);
+
+// All authenticated analytics routes require authentication
 router.use(authenticateToken);
 
 // Common analytics routes (role-based data)

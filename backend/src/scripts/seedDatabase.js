@@ -1,3 +1,4 @@
+require('dotenv').config();
 const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 const User = require('../models/User');
@@ -372,7 +373,10 @@ const generateSampleSubscriptions = (users, plans) => {
       const currentUsage = Math.floor(Math.random() * plan.features.dataQuota.amount * 0.9);
       const lastMonthUsage = Math.floor(Math.random() * plan.features.dataQuota.amount * 0.8);
       const avgUsage = (currentUsage + lastMonthUsage) / 2;
-      
+
+      const nextBillingDate = new Date(startDate);
+      nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
+
       subscriptions.push({
         subscriptionId: uuidv4(),
         userId: user.userId,
@@ -388,7 +392,7 @@ const generateSampleSubscriptions = (users, plans) => {
         dates: {
           startDate: startDate,
           endDate: endDate,
-          nextBillingDate: isActive ? endDate : null,
+          nextBillingDate: status === 'active' ? nextBillingDate : endDate, // Use endDate for non-active subscriptions
           lastRenewalDate: isActive && Math.random() > 0.5 ? new Date(startDate.getTime() + 30*24*60*60*1000) : null,
           cancellationDate: status === 'cancelled' ? new Date(endDate.getTime() - 7*24*60*60*1000) : null
         },
@@ -515,12 +519,12 @@ const seedDatabase = async () => {
     await AuditLog.create(auditLogs);
     console.log(`Created ${auditLogs.length} audit log entries`);
     
-    console.log('\\n=== Database seeded successfully! ===');
-    console.log('\\nTest accounts:');
+    console.log('\n=== Database seeded successfully! ===');
+    console.log('\nTest accounts:');
     console.log('Admin: admin@lumen.com / admin123');
     console.log('User: john.doe@email.com / user123');
     console.log('User: jane.smith@email.com / user123');
-    console.log('\\nStatistics:');
+    console.log('\nStatistics:');
     console.log(`- ${createdUsers.length} users (${createdUsers.filter(u => u.role === 'admin').length} admin, ${createdUsers.filter(u => u.role === 'user').length} regular)`);
     console.log(`- ${createdPlans.length} plans`);
     console.log(`- ${createdSubscriptions.length} subscriptions`);

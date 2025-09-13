@@ -8,10 +8,16 @@ export default {
     extend: {
       colors: {
         telecom: {
-          primary: '#1e40af',
-          secondary: '#3b82f6',
+          primary: '#667eea',
+          secondary: '#764ba2',
           accent: '#06b6d4',
         }
+      },
+      boxShadow: {
+        '3xl': '0 35px 60px -12px rgba(0, 0, 0, 0.25)',
+      },
+      backdropBlur: {
+        'xs': '2px',
       }
     },
   },

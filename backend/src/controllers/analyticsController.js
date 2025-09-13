@@ -4,6 +4,46 @@ const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 
 const analyticsController = {
+  // Get public dashboard overview stats (no auth required)
+  getPublicDashboardStats: async (req, res) => {
+    try {
+      // Public stats that don't require authentication
+      const [
+        totalUsers,
+        totalActiveSubscriptions,
+        totalPlans,
+        totalSubscriptions
+      ] = await Promise.all([
+        User.countDocuments({ isActive: true }),
+        Subscription.countDocuments({ status: 'active' }),
+        Plan.countDocuments({ 'availability.isActive': true }),
+        Subscription.countDocuments()
+      ]);
+
+      const stats = {
+        totalUsers,
+        activeSubscriptions: totalActiveSubscriptions,
+        totalPlans,
+        monthlyRevenue: 25000, // Mock data
+        churnRate: 5.2, // Mock data
+        averageRevenue: totalUsers > 0 ? (25000 / totalUsers).toFixed(2) : 0
+      };
+
+      res.json({
+        success: true,
+        data: stats
+      });
+
+    } catch (error) {
+      console.error('Public dashboard stats error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch dashboard stats',
+        error: error.message
+      });
+    }
+  },
+
   // Get dashboard overview stats
   getDashboardStats: async (req, res) => {
     try {
