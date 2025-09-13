@@ -13,16 +13,22 @@ const NetworkData = () => {
   const fetchNetworkData = async () => {
     try {
       setLoading(true);
+      setError(null); // Reset previous errors
+
       const response = await fetch(`${import.meta.env.VITE_API_URL}/network/data`);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
       const data = await response.json();
       
-      if (data.success) {
+      if (data.success && Array.isArray(data.data)) {
         setNetworkData(data.data);
       } else {
+        setNetworkData([]);
         setError('Failed to fetch network data');
       }
     } catch (err) {
       setError('Network error: ' + err.message);
+      setNetworkData([]);
     } finally {
       setLoading(false);
     }
@@ -62,13 +68,16 @@ const NetworkData = () => {
         </button>
       </div>
       
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {networkData.map((tower) => (
-          <NetworkCard key={tower.id} tower={tower} />
-        ))}
-      </div>
-      
-      {networkData.length === 0 && (
+      {networkData.length > 0 ? (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {networkData.map((tower) => (
+            <NetworkCard 
+              key={tower.towerId || tower.id} // Use unique ID if available
+              tower={tower} 
+            />
+          ))}
+        </div>
+      ) : (
         <div className="text-center text-gray-500 py-12">
           No network data available
         </div>
@@ -78,5 +87,3 @@ const NetworkData = () => {
 };
 
 export default NetworkData;
-
-

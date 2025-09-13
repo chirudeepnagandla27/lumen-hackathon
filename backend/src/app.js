@@ -10,6 +10,7 @@ const authRoutes = require('./routes/auth');
 const planRoutes = require('./routes/plans');
 const subscriptionRoutes = require('./routes/subscriptions');
 const analyticsRoutes = require('./routes/analytics');
+const networkRoutes = require('./routes/networkRoutes'); // NEW
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -18,7 +19,10 @@ const PORT = process.env.PORT || 3000;
 connectDB();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:3001', // frontend port
+  credentials: true
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -39,6 +43,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/plans', planRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/network', networkRoutes); // NEW
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -59,6 +64,5 @@ app.listen(PORT, () => {
   console.log(`   • Plans: http://localhost:${PORT}/api/plans`);
   console.log(`   • Subscriptions: http://localhost:${PORT}/api/subscriptions`);
   console.log(`   • Analytics: http://localhost:${PORT}/api/analytics`);
+  console.log(`   • Network Stats: http://localhost:${PORT}/api/network/stats`); // NEW
 });
-
-
