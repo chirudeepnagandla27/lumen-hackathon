@@ -1,0 +1,23 @@
+# Temporary files
+
+*.log
+
+.DS_Store
+
+
+
+# Dependencies
+
+node_modules/
+
+
+
+# Build directory
+
+/build/
+
+
+
+# Sensitive data
+
+.env
